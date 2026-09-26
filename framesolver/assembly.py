@@ -39,9 +39,13 @@ def assemble(
     k_global_by_member / eq_load_global_by_member:
         与 members 等长、且已转换到整体坐标的单元刚度 / 等效节点力
     nodal_loads: 校验后的节点荷载模型列表
+
+    组装精度跟随单元矩阵的 dtype（分析主流程以 np.longdouble 组装，
+    抵消同一自由度上多根杆刚度叠加的舍入；直接喂 float64 时行为不变）。
     """
-    stiffness = np.zeros((ndof, ndof), dtype=float)
-    load = np.zeros(ndof, dtype=float)
+    dtype = np.result_type(float, *(k.dtype for k in k_global_by_member))
+    stiffness = np.zeros((ndof, ndof), dtype=dtype)
+    load = np.zeros(ndof, dtype=dtype)
 
     for member, k_g, eq_g in zip(
         members, k_global_by_member, eq_load_global_by_member, strict=True

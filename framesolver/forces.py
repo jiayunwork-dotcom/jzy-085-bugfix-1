@@ -32,9 +32,12 @@ def member_end_forces_local(
     d_global_member: np.ndarray,
     eq_local: np.ndarray,
 ) -> np.ndarray:
-    """返回杆件作用于节点的局部坐标六维杆端力 f = P_eq - K_l T d_g。"""
-    d_local = t @ d_global_member
-    return np.asarray(eq_local, dtype=float) - k_local @ d_local
+    """返回杆件作用于节点的局部坐标六维杆端力 f = P_eq - K_l T d_g。
+
+    结果精度跟随输入（主流程中 K_l / P_eq 为 np.longdouble）。
+    """
+    d_local = t @ np.asarray(d_global_member, dtype=float)
+    return np.asarray(eq_local) - k_local @ d_local
 
 
 def reactions(
@@ -44,7 +47,8 @@ def reactions(
     restrained: np.ndarray,
 ) -> np.ndarray:
     """由全部平衡行回代支座反力（未约束自由度处为 0）。"""
-    full = np.zeros(displacement.shape[0], dtype=float)
+    dtype = np.result_type(stiffness, displacement, load)
+    full = np.zeros(displacement.shape[0], dtype=dtype)
     if restrained.size:
         full[restrained] = stiffness[restrained, :] @ displacement - load[restrained]
     return full

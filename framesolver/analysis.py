@@ -1,4 +1,11 @@
-"""把各功能段串成一次完整的直接刚度法核算。"""
+"""把各功能段串成一次完整的直接刚度法核算。
+
+总刚组装、荷载向量、内力与反力回代全程使用扩展精度
+（np.longdouble），只有求解器内部的分解与判秩落到 float64：
+高精度组装抵消了“同一自由度上多根杆刚度叠加”的舍入，使细分网格
+（如一根杆分 300 段）在 N·mm 这类大数值单位制下依然可信；
+求解器内部再做对角缩放与迭代精化（见 solver.py）。
+"""
 
 from __future__ import annotations
 
@@ -10,6 +17,9 @@ from .element import local_stiffness, uniform_transverse_equivalent_loads
 from .geometry import force_to_global, stiffness_to_global, transformation_matrix
 from .solver import solve_system
 from .validation import validate
+
+# 组装与回代使用的扩展精度
+_EXTENDED = np.longdouble
 
 
 def analyze_frame(frame) -> dict:
@@ -26,21 +36,23 @@ def analyze_frame(frame) -> dict:
     for dist in frame.distributed_loads:
         udl_by_member[dist.member_id] = udl_by_member.get(dist.member_id, 0.0) + dist.qy
 
-    # 2) 逐杆：局部刚度 -> 坐标变换 -> 等效节点力
+    # 2) 逐杆：局部刚度 -> 坐标变换 -> 等效节点力（扩展精度）
     k_global_list: list[np.ndarray] = []
     eq_global_list: list[np.ndarray] = []
     local_data: list[tuple] = []
     for member in frame.members:
         geom = geometries[member.id]
         k_local = local_stiffness(
-            geom.length, member.elastic_modulus, member.area, member.inertia
+            geom.length, member.elastic_modulus, member.area, member.inertia,
+            dtype=_EXTENDED,
         )
         t = transformation_matrix(geom)
-        k_global_list.append(stiffness_to_global(k_local, t))
+        t_ex = t.astype(_EXTENDED)
+        k_global_list.append(stiffness_to_global(k_local, t_ex))
 
         qy = udl_by_member.get(member.id, 0.0)
-        eq_local = uniform_transverse_equivalent_loads(geom.length, qy)
-        eq_global_list.append(force_to_global(eq_local, t))
+        eq_local = uniform_transverse_equivalent_loads(geom.length, qy, dtype=_EXTENDED)
+        eq_global_list.append(force_to_global(eq_local, t_ex))
         local_data.append((member, geom, k_local, t, eq_local))
 
     # 3) 总刚与总荷载向量组装

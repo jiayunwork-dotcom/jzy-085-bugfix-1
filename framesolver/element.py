@@ -30,7 +30,8 @@ from __future__ import annotations
 import numpy as np
 
 
-def local_stiffness(length: float, e: float, a: float, inertia: float) -> np.ndarray:
+def local_stiffness(length: float, e: float, a: float, inertia: float,
+                    dtype=float) -> np.ndarray:
     """形成 6×6 局部坐标系单元刚度矩阵。
 
     参数
@@ -39,8 +40,11 @@ def local_stiffness(length: float, e: float, a: float, inertia: float) -> np.nda
     e:      弹性模量 E
     a:      截面面积 A
     inertia: 截面惯性矩 I
+    dtype:  矩阵元素精度；默认 float64，分析主流程传 np.longdouble
+            以扩展精度参与总刚组装
     """
-    l = float(length)
+    l = dtype(length)
+    e, a, inertia = dtype(e), dtype(a), dtype(inertia)
     l2 = l * l
     l3 = l2 * l
 
@@ -60,14 +64,18 @@ def local_stiffness(length: float, e: float, a: float, inertia: float) -> np.nda
             [0.0, -b, -c, 0.0, b, -c],
             [0.0, c, g, 0.0, -c, d],
         ],
-        dtype=float,
+        dtype=dtype,
     )
 
 
-def uniform_transverse_equivalent_loads(length: float, qy: float) -> np.ndarray:
-    """满跨局部 +ȳ 方向均布荷载的单元等效节点力（6 维，局部坐标）。"""
-    l = float(length)
-    q = float(qy)
+def uniform_transverse_equivalent_loads(length: float, qy: float,
+                                        dtype=float) -> np.ndarray:
+    """满跨局部 +ȳ 方向均布荷载的单元等效节点力（6 维，局部坐标）。
+
+    dtype 含义同 :func:`local_stiffness`。
+    """
+    l = dtype(length)
+    q = dtype(qy)
     return np.array(
         [
             0.0,
@@ -77,5 +85,5 @@ def uniform_transverse_equivalent_loads(length: float, qy: float) -> np.ndarray:
             q * l / 2.0,
             -q * l * l / 12.0,
         ],
-        dtype=float,
+        dtype=dtype,
     )
