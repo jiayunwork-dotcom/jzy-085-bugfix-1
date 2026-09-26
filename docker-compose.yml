@@ -1,0 +1,15 @@
+services:
+  frame-solver:
+    build: .
+    image: frame-solver:latest
+    container_name: frame-solver
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      # 无业务页面，仅用 OpenAPI 文档端点探活
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

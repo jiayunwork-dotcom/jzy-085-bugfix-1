@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {"id": "A", "x": 0.0, "y": 0.0, "restraints": [true, true, false]},
+    {"id": "B", "x": 6.0, "y": 0.0, "restraints": [true, true, false]}
+  ],
+  "members": [
+    {"id": "beam", "node_i": "A", "node_j": "B", "elastic_modulus": 3.0e7, "area": 5.0e-2, "inertia": 2.0e-4}
+  ],
+  "nodal_loads": [],
+  "distributed_loads": [
+    {"member_id": "beam", "load_type": "uniform_transverse", "qy": -8.0}
+  ]
+}
