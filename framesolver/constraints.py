@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .precision import DD
+
 
 def classify_dofs(restraints: list[list[bool]]) -> tuple[np.ndarray, np.ndarray]:
     """按节点顺序展开约束标记，返回 (自由自由度, 受约束自由度) 索引数组。"""
@@ -31,3 +33,27 @@ def classify_dofs(restraints: list[list[bool]]) -> tuple[np.ndarray, np.ndarray]
 def condense(stiffness: np.ndarray, load: np.ndarray, free: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """取出缩聚矩阵 K_ff 与右端项 P_f。"""
     return stiffness[np.ix_(free, free)], load[free]
+
+
+def condense_compensated(stiffness: DD, load: DD, free: np.ndarray) -> tuple[DD, DD]:
+    """补偿精度版本的缩聚：纯索引切片，不引入任何舍入。"""
+    return (
+        DD(
+            stiffness.hi[np.ix_(free, free)],
+            stiffness.lo[np.ix_(free, free)],
+        ),
+        DD(load.hi[free], load.lo[free]),
+    )
+
+
+def condense_compensated(stiffness, load, free: np.ndarray):
+    """补偿精度版本的缩聚：对 DD 总刚 / 荷载向量取自由自由度子块。"""
+    from .precision import DD
+
+    return (
+        DD(
+            stiffness.hi[np.ix_(free, free)],
+            stiffness.lo[np.ix_(free, free)],
+        ),
+        DD(load.hi[free], load.lo[free]),
+    )

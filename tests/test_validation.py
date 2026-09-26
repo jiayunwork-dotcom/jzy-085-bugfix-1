@@ -217,6 +217,17 @@ def test_rank_deficient_matrix_detected():
         solve_system(k, np.array([1.0, 2.0, 3.0]))
 
 
+def test_zero_stiffness_dof_detected():
+    """某自由度完全不受刚度约束（对角元为零）必须判奇异。
+
+    这是机构的最直接形式：该自由度可以任意运动而不产生抗力。
+    """
+    k = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    with pytest.raises(SingularMatrixError) as exc:
+        solve_system(k, np.array([1.0, 2.0, 3.0]))
+    assert exc.value.code == "SINGULAR_MATRIX"
+
+
 def test_all_frame_errors_carry_code_and_message():
     """所有业务错误都带机器可读 code 与非空中文说明。"""
     for err_cls in [

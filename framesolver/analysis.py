@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import assembly, element, forces as forces_mod
-from .constraints import classify_dofs, condense
+from .constraints import classify_dofs, condense_compensated
 from .element import local_stiffness, uniform_transverse_equivalent_loads
 from .geometry import force_to_global, stiffness_to_global, transformation_matrix
 from .solver import solve_system
@@ -43,8 +43,8 @@ def analyze_frame(frame) -> dict:
         eq_global_list.append(force_to_global(eq_local, t))
         local_data.append((member, geom, k_local, t, eq_local))
 
-    # 3) 总刚与总荷载向量组装
-    stiffness, load = assembly.assemble(
+    # 3) 总刚与总荷载向量组装（补偿精度，消除 scatter-add 的随机舍入）
+    stiffness, load = assembly.assemble_compensated(
         ndof,
         frame.members,
         node_index,
@@ -56,7 +56,7 @@ def analyze_frame(frame) -> dict:
     # 4) 划行划列施加约束，求解自由自由度
     restraints = [node.restraints for node in frame.nodes]
     free_dofs, restrained_dofs = classify_dofs(restraints)
-    k_ff, p_f = condense(stiffness, load, free_dofs)
+    k_ff, p_f = condense_compensated(stiffness, load, free_dofs)
     d_free = solve_system(k_ff, p_f)  # 奇异矩阵在此抛 SingularMatrixError
 
     # 5) 还原完整位移向量（被约束自由度位移为零）
@@ -97,8 +97,11 @@ def analyze_frame(frame) -> dict:
             }
         )
 
-    # 7) 支座反力回代
-    reaction_vector = forces_mod.reactions(stiffness, displacement, load, restrained_dofs)
+    # 7) 支座反力回代（float64 主项即可：反力 = 受约束行的 K d − P，
+    #    不涉及矩阵求逆，1e-16 级精度足够）
+    reaction_vector = forces_mod.reactions(
+        stiffness.hi, displacement, load.hi, restrained_dofs
+    )
     _guard_finite(reaction_vector, "支座反力")
 
     reactions_out: list[dict] = []

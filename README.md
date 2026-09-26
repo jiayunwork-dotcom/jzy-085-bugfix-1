@@ -127,12 +127,20 @@ pytest
    `R = [[c,s,0],[-s,c,0],[0,0,1]]`。
 3. **总刚组装**（`assembly.py`）：按自由度 scatter-add 进总刚，
    节点荷载与均布荷载等效节点力（`[0, qL/2, qL²/12, 0, qL/2, −qL²/12]`）
-   叠加进荷载向量。
+   叠加进荷载向量。核算主路径使用补偿精度（double-double）累加，
+   消除 scatter-add 的随机舍入（`precision.py`）。
 4. **约束施加**（`constraints.py`）：全程只使用**划行划列法**一种——
    被约束自由度位移置零并从方程中删去，解 `K_ff d_f = P_f`；
    不使用大数罚函数，因而没有罚系数导致的病态问题。
-5. **方程求解**（`solver.py`）：SVD 判秩（最小奇异值 < 1e-10 × 最大奇异值
-   即判奇异），Cholesky 求解（失败退对称 SVD），并强制残差复核（1e-8）。
+5. **方程求解**（`solver.py`）：先做**对称对角均衡**
+   `K̂ = D⁻¹KD⁻¹`（`D = sqrt(diag K)`）——均衡矩阵在任何对角合同
+   变换（单位换算正是此类变换）下不变，判秩与求解因此与用户
+   选择的自洽单位（N·mm / kN·m）无关；对均衡矩阵 SVD 判秩
+   （最小奇异值 < 1e-12 × 最大奇异值即判奇异）；float64 Cholesky
+   求解（失败退最小二乘）后做**混合精度迭代精化**——残差用
+   double-double 补偿精度计算，把细网格（条件数 ~1e10）下的前向
+   误差压回 1e-12 量级；最后强制**逐行（分量式）后向误差**复核
+   （1e-8），残差过大一律按奇异 / 病态处理。
 6. **内力回代**（`forces.py`）：杆端力严格用**本杆自己的局部刚度乘本杆的
    局部位移**恢复：`f = P_eq − K_l (T d_g)`；不另起弯矩查表。
 7. **反力回代**：取受约束行 `R = (K d − P)_r`。
@@ -183,12 +191,15 @@ pytest
 4. 每个刚性节点处，交汇各杆杆端弯矩 + 外加节点力矩 + 支座反力矩 = 0
    （水平、竖向力平衡同样逐节点检查）。
 
-测试共 58 个，分布在：
+测试共 85 个，分布在：
 
 - `test_elements.py`：方向余弦、变换正交性、单元刚度系数、刚体零空间、
   等效荷载合力、组装 scatter-add；
+- `test_precision.py`：补偿精度（double-double）运算与精确有理数对照；
 - `test_equilibrium.py`：上述四条力学恒等式；
 - `test_portal_frame.py`：门式刚架教材反力 / 位移 / 弯矩与梁经典解；
+- `test_units_and_mesh.py`：复现算例——20 层刚架 N·mm / kN·m 两套单位、
+  悬臂 1/8/16/200/300 段，结果与单位制、网格切分无关（容差 1e-6）；
 - `test_validation.py`：全部非法输入类型与奇异性；
 - `test_http_api.py`：HTTP 成功 / 各类错误 / 坏 JSON / OpenAPI。
 
@@ -200,9 +211,10 @@ pytest
 framesolver/
 ├── geometry.py     # 方向余弦与坐标变换
 ├── element.py      # 六阶局部单元刚度 + 均布荷载等效节点力
-├── assembly.py     # 总刚与荷载向量组装
+├── precision.py    # 补偿精度（double-double）运算
+├── assembly.py     # 总刚与荷载向量组装（float64 / 补偿精度两版）
 ├── constraints.py  # 自由度分类（划行划列法）
-├── solver.py       # SVD 判秩 + Cholesky 求解 + 残差复核
+├── solver.py       # 对角均衡 + SVD 判秩 + Cholesky 与混合精度精化 + 残差复核
 ├── forces.py       # 杆端内力与支座反力回代
 ├── validation.py   # 全部输入校验（含连通性、刚体约束）
 ├── models.py       # Pydantic 输入 / 输出模型
